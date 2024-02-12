@@ -20,6 +20,20 @@ func TestRateLimiterCanIncrease(t *testing.T) {
 	}
 }
 
+func TestRateLimiterCanChangeConfig(t *testing.T) {
+	rateLimiter := NewRateLimiter(adapter.NewMemoryStorage())
+
+	err := rateLimiter.AddKey("1", "token", 10, 1)
+	if err != nil {
+		t.Errorf("Expected nil, got %v", err)
+	}
+
+	err = rateLimiter.AddKey("1", "token", 20, 2)
+	if err != nil {
+		t.Errorf("Expected nil, got %v", err)
+	}
+}
+
 func TestRateLimiterCantIncreaseWithoutAdd(t *testing.T) {
 	rateLimiter := NewRateLimiter(adapter.NewMemoryStorage())
 

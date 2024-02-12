@@ -35,7 +35,12 @@ func (rl *RateLimiter) AddKey(key string, keyType string, rps, timeout int) erro
 		return errors.New("RPS and Timeout must be greater than 0")
 	}
 
-	err := rl.StorageAdapter.AddKey(key, keyType, rps, timeout)
+	foundKey, err := rl.StorageAdapter.GetKey(key, keyType)
+	if foundKey != nil {
+		rl.StorageAdapter.DeleteKey(key, keyType)
+	}
+
+	err = rl.StorageAdapter.AddKey(key, keyType, rps, timeout)
 	return err
 }
 
@@ -46,6 +51,11 @@ func (rl *RateLimiter) Increment(key string, keyType string) (*time.Duration, er
 
 	if keyType == "" {
 		return nil, errors.New("KeyType is required")
+	}
+
+	_, err := rl.StorageAdapter.GetKey(key, keyType)
+	if err != nil {
+		return nil, err
 	}
 
 	timeLeft, err := rl.StorageAdapter.Increment(key, keyType)

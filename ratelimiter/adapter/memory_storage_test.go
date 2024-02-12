@@ -1,87 +1,97 @@
 package adapter
 
 import (
-	"strings"
 	"testing"
-	"time"
 )
 
-func TestMemoryStorageIncrementWithinOneSecond(t *testing.T) {
+func TestMemoryStorageBlockKey(t *testing.T) {
 	memoryStorage := NewMemoryStorage()
-	memoryStorage.AddKey("1", "token", 2, 1)
+	key := "1"
+	keyType := "token"
 
-	memoryStorage.Increment("1", "token")
-	memoryStorage.Increment("1", "token")
-	timeLeft, rateLimitedError := memoryStorage.Increment("1", "token")
+	memoryStorage.AddKey(key, keyType)
 
-	if rateLimitedError != RateLimitExceeded {
-		t.Errorf("Expected RateLimitExceeded, got %v", rateLimitedError)
+	_, err := memoryStorage.GetBlockedKey(key, keyType)
+
+	if err != KeyTypeNotFound {
+		t.Errorf("Expected nil, got %v", err)
 	}
 
-	if timeLeft == nil {
-		t.Errorf("Expected timeLeft, got %v", timeLeft)
+	err = memoryStorage.BlockKey(key, keyType)
+	if err != nil {
+		t.Errorf("Expected nil, got %v", err)
 	}
 
-	timeLeft, blockedError := memoryStorage.Increment("1", "token")
-	if !strings.Contains(blockedError.Error(), "Key is blocked") {
-		t.Errorf("Expected Key is blocked for, got %v", blockedError)
+	blockedAt, err := memoryStorage.GetBlockedKey(key, keyType)
+	if err != nil {
+		t.Errorf("Expected nil, got %v", err)
+	}
+	if blockedAt == nil {
+		t.Errorf("Expected time, got nil")
 	}
 
-	if timeLeft == nil {
-		t.Errorf("Expected timeLeft, got %v", timeLeft)
+	err = memoryStorage.UnblockKey(key, keyType)
+	if err != nil {
+		t.Errorf("Expected nil, got %v", err)
+	}
+
+	_, err = memoryStorage.GetBlockedKey(key, keyType)
+	if err != KeyNotFound {
+		t.Errorf("Expected nil, got %v", err)
 	}
 }
 
-func TestMemoryStorageIncrementAfter1Second(t *testing.T) {
+func TestMemoryStorageKey(t *testing.T) {
 	memoryStorage := NewMemoryStorage()
-	memoryStorage.AddKey("1", "token", 2, 1)
+	key := "1"
+	keyType := "token"
 
-	memoryStorage.Increment("1", "token")
-	memoryStorage.Increment("1", "token")
-	time.Sleep(1 * time.Second)
-	timeLeft, error := memoryStorage.Increment("1", "token")
-
-	if error != nil {
-		t.Errorf("Expected nil, got %v", error)
+	keyInfo, err := memoryStorage.GetKeyInfo(key, keyType)
+	if err != KeyTypeNotFound {
+		t.Errorf("Expected nil, got %v", err)
 	}
 
-	if timeLeft != nil {
-		t.Errorf("Expected nil, got %v", timeLeft)
+	if keyInfo != nil {
+		t.Errorf("Expected nil, got %v", keyInfo)
+	}
+
+	err = memoryStorage.AddKey(key, keyType)
+	if err != nil {
+		t.Errorf("Expected nil, got %v", err)
+	}
+
+	keyInfo, err = memoryStorage.GetKeyInfo(key, keyType)
+	if err != nil {
+		t.Errorf("Expected nil, got %v", err)
+	}
+
+	if keyInfo == nil {
+		t.Errorf("Expected keyInfo, got nil")
+	}
+
+	err = memoryStorage.AddKey(key, keyType)
+	if err != KeyAlreadyRegistered {
+		t.Errorf("Expected KeyAlreadyExists, got %v", err)
 	}
 }
 
-func TestMemoryStorageIncrementWithoutAdd(t *testing.T) {
+func TestMemoryStorageIncrement(t *testing.T) {
 	memoryStorage := NewMemoryStorage()
-	_, error := memoryStorage.Increment("1", "token")
+	key := "1"
+	keyType := "token"
 
-	if error != KeyTypeNotFound {
-		t.Errorf("Expected KeyTypeNotFound, got %v", error)
-	}
-}
-
-func TestMemoryStorageAddDifferentRps(t *testing.T) {
-	memoryStorage := NewMemoryStorage()
-
-	memoryStorage.AddKey("1", "token", 5, 1)
-	error := memoryStorage.AddKey("1", "token", 10, 1)
-
-	if error != KeyWithDifferentConfig {
-		t.Errorf("Expected KeyAlreadyExists, got %v", error)
+	err := memoryStorage.Increment(key, keyType)
+	if err != KeyTypeNotFound {
+		t.Errorf("Expected nil, got %v", err)
 	}
 
-}
-
-func TestMemoryStorageDeleteKey(t *testing.T) {
-	memoryStorage := NewMemoryStorage()
-
-	memoryStorage.AddKey("1", "token", 5, 1)
-	error := memoryStorage.DeleteKey("1", "token")
-	if error != nil {
-		t.Errorf("Expected nil, got %v", error)
+	err = memoryStorage.AddKey(key, keyType)
+	if err != nil {
+		t.Errorf("Expected nil, got %v", err)
 	}
 
-	alreadyDeletedError := memoryStorage.DeleteKey("1", "token")
-	if !strings.Contains(alreadyDeletedError.Error(), "Key doesn't exist") {
-		t.Errorf("Expected Key doesn't exist, got %v", alreadyDeletedError)
+	err = memoryStorage.Increment(key, keyType)
+	if err != nil {
+		t.Errorf("Expected nil, got %v", err)
 	}
 }

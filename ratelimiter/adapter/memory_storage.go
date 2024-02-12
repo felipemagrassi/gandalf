@@ -2,62 +2,140 @@ package adapter
 
 import (
 	"errors"
-	"fmt"
 	"sync"
 	"time"
 )
 
 var (
-	RateLimitExceeded      = errors.New("Rate limit exceeded")
-	KeyWithDifferentConfig = errors.New("Key already exists with different rps")
-	KeyTypeNotFound        = errors.New("Key type not found, please use AddKey method")
-	KeyNotFound            = errors.New("Key not found, please use AddKey method")
+	KeyNotFound          = errors.New("Key not found")
+	KeyTypeNotFound      = errors.New("KeyTypeNotFound")
+	ReachedMaxTries      = errors.New("Reached max tries")
+	KeyAlreadyRegistered = errors.New("Key already registered")
+	KeyIsBlocked         = errors.New("Key is blocked")
 )
 
-type BlockedKey struct {
-	duration time.Duration
-}
-
-func (b *BlockedKey) Error() string {
-	return fmt.Sprintf("Key is blocked for %v, please try again later", b.duration)
-}
-
 type MemoryStorage struct {
-	mutex     sync.Mutex
-	keyConfig map[string]map[string]StorageConfig
-	accesses  map[string]map[string][]time.Time
-	blocked   map[string]map[string]time.Time
+	mutex       sync.Mutex
+	accessMutex sync.Mutex
+	blockMutex  sync.Mutex
+	keyConfig   map[string]map[string]StorageConfig
+	accesses    map[string]map[string][]time.Time
+	blocked     map[string]map[string]time.Time
 }
 
 func NewMemoryStorage() Storage {
 	return &MemoryStorage{
-		keyConfig: make(map[string]map[string]StorageConfig),
-		blocked:   make(map[string]map[string]time.Time),
-		accesses:  make(map[string]map[string][]time.Time),
-		mutex:     sync.Mutex{},
+		keyConfig:   make(map[string]map[string]StorageConfig),
+		blocked:     make(map[string]map[string]time.Time),
+		accesses:    make(map[string]map[string][]time.Time),
+		accessMutex: sync.Mutex{},
+		blockMutex:  sync.Mutex{},
 	}
 }
 
-func (ms *MemoryStorage) Increment(key string, keyType string) (*time.Duration, error) {
-	ms.mutex.Lock()
-	defer ms.mutex.Unlock()
+func (ms *MemoryStorage) GetKeyInfo(key string, keyType string) (*StorageConfig, error) {
+	ms.accessMutex.Lock()
+	defer ms.accessMutex.Unlock()
 
-	config, err := ms.getConfig(key, keyType)
-	if err != nil {
-		return nil, err
+	_, ok := ms.keyConfig[keyType]
+	if !ok {
+		return nil, KeyTypeNotFound
 	}
 
-	_, ok := ms.blocked[keyType][key]
+	_, ok = ms.keyConfig[keyType][key]
+	if !ok {
+		return nil, KeyNotFound
+	}
 
-	if ok {
-		blockedAt := ms.blocked[keyType][key]
-		if time.Since(blockedAt) > config.timeout {
-			delete(ms.blocked[keyType], key)
-		} else {
-			timeLeft := config.timeout - time.Since(blockedAt)
-			return &timeLeft, &BlockedKey{duration: timeLeft}
-		}
+	return &StorageConfig{
+		keyType:  keyType,
+		key:      key,
+		accesses: ms.accesses[keyType][key],
+	}, nil
+}
 
+func (ms *MemoryStorage) GetBlockedKey(key string, keyType string) (*time.Time, error) {
+	ms.blockMutex.Lock()
+	defer ms.blockMutex.Unlock()
+
+	_, ok := ms.blocked[keyType]
+	if !ok {
+		return nil, KeyTypeNotFound
+	}
+	_, ok = ms.blocked[keyType][key]
+	if !ok {
+		return nil, KeyNotFound
+	}
+
+	blockedAt := ms.blocked[keyType][key]
+	return &blockedAt, nil
+}
+
+func (ms *MemoryStorage) Increment(key string, keyType string) error {
+	ms.accessMutex.Lock()
+	defer ms.accessMutex.Unlock()
+
+	_, ok := ms.accesses[keyType]
+	if !ok {
+		return KeyTypeNotFound
+	}
+	_, ok = ms.accesses[keyType][key]
+	if !ok {
+		return KeyNotFound
+	}
+
+	ms.accesses[keyType][key] = append(ms.accesses[keyType][key], time.Now())
+
+	return nil
+}
+
+func (ms *MemoryStorage) BlockKey(key string, keyType string) error {
+	ms.blockMutex.Lock()
+	defer ms.blockMutex.Unlock()
+
+	_, ok := ms.keyConfig[keyType]
+	if !ok {
+		return KeyTypeNotFound
+	}
+
+	_, ok = ms.keyConfig[keyType][key]
+	if !ok {
+		return KeyNotFound
+	}
+
+	_, ok = ms.blocked[keyType]
+	if !ok {
+		ms.blocked[keyType] = make(map[string]time.Time)
+	}
+
+	ms.blocked[keyType][key] = time.Now()
+
+	return nil
+}
+
+func (ms *MemoryStorage) UnblockKey(key string, keyType string) error {
+	ms.blockMutex.Lock()
+	defer ms.blockMutex.Unlock()
+	_, ok := ms.blocked[keyType]
+	if !ok {
+		return KeyTypeNotFound
+	}
+	_, ok = ms.blocked[keyType][key]
+	if !ok {
+		return KeyNotFound
+	}
+	delete(ms.blocked[keyType], key)
+	return nil
+}
+
+func (ms *MemoryStorage) AddKey(key string, keyType string) error {
+	ms.accessMutex.Lock()
+	defer ms.accessMutex.Unlock()
+
+	_, ok := ms.keyConfig[keyType]
+
+	if !ok {
+		ms.keyConfig[keyType] = make(map[string]StorageConfig)
 	}
 
 	_, ok = ms.accesses[keyType]
@@ -70,83 +148,16 @@ func (ms *MemoryStorage) Increment(key string, keyType string) (*time.Duration, 
 		ms.accesses[keyType][key] = make([]time.Time, 0)
 	}
 
-	for _, access := range ms.accesses[keyType][key] {
-		if time.Since(access) > time.Second {
-			ms.accesses[keyType][key] = ms.accesses[keyType][key][1:]
-		}
-	}
-
-	if len(ms.accesses[keyType][key]) >= config.rps {
-		_, ok = ms.blocked[keyType]
-		if !ok {
-			ms.blocked[keyType] = make(map[string]time.Time)
-		}
-
-		ms.blocked[keyType][key] = time.Now()
-
-		return &config.timeout, RateLimitExceeded
-	}
-
-	ms.accesses[keyType][key] = append(ms.accesses[keyType][key], time.Now())
-
-	return nil, nil
-}
-
-func (ms *MemoryStorage) AddKey(key string, keyType string, rps, timeout int) error {
-	ms.mutex.Lock()
-	defer ms.mutex.Unlock()
-
-	foundType, ok := ms.keyConfig[keyType]
-
-	if !ok {
-		ms.keyConfig[keyType] = make(map[string]StorageConfig)
-	}
-
-	foundKey, ok := foundType[key]
+	_, ok = ms.keyConfig[keyType][key]
 
 	if !ok {
 		ms.keyConfig[keyType][key] = StorageConfig{
-			rps:     rps,
-			timeout: time.Duration(timeout) * time.Second,
+			key:      key,
+			keyType:  keyType,
+			accesses: ms.accesses[keyType][key],
 		}
 		return nil
 	}
 
-	if foundKey.rps != rps {
-		return KeyWithDifferentConfig
-	}
-
-	if foundKey.timeout != time.Duration(timeout)*time.Second {
-		return KeyWithDifferentConfig
-	}
-
-	return nil
-}
-
-func (ms *MemoryStorage) DeleteKey(key string, keyType string) error {
-	ms.mutex.Lock()
-	defer ms.mutex.Unlock()
-
-	_, ok := ms.keyConfig[keyType][key]
-	if !ok {
-		return errors.New("Key doesn't exist")
-	}
-
-	delete(ms.keyConfig[keyType], key)
-
-	return nil
-}
-
-func (ms *MemoryStorage) getConfig(key string, keyType string) (*StorageConfig, error) {
-	_, ok := ms.keyConfig[keyType]
-	if !ok {
-		return nil, KeyTypeNotFound
-	}
-
-	_, ok = ms.keyConfig[keyType][key]
-	if !ok {
-		return nil, KeyNotFound
-	}
-
-	return &StorageConfig{rps: ms.keyConfig[keyType][key].rps, timeout: ms.keyConfig[keyType][key].timeout}, nil
+	return KeyAlreadyRegistered
 }
