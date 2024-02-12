@@ -16,10 +16,10 @@ func greet(w http.ResponseWriter, r *http.Request) {
 func main() {
 	r := chi.NewRouter()
 
+	r.Use(middleware.Logger)
 	r.Get("/", greet)
 
-	r.Use(middleware.Recoverer)
-
+	fmt.Println("Server started at :8081")
 	err := http.ListenAndServe(":8081", r)
 	if err != nil {
 		panic(err)

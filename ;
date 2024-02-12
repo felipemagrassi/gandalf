@@ -1,0 +1,7 @@
+package adapter
+
+import "time"
+
+type Storage interface {
+	Add(key string, keyType string, at time.Time, rps int) error
+}
