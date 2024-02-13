@@ -18,6 +18,7 @@ const (
 	EnvRedisPort     = "REDIS_PORT"
 	EnvRedisDatabase = "REDIS_DATABASE"
 	EnvRedisPassword = "REDIS_PASSWORD"
+	EnvUseRedis      = "USE_REDIS"
 )
 
 type RedisConfig struct {
@@ -87,6 +88,7 @@ func newStorage() adapter.Storage {
 	redisPort := envLookup(EnvRedisPort, "")
 	redisPassword := envLookup(EnvRedisPassword, "")
 	redisDatabase := envIntLookup(EnvRedisDatabase, 0)
+	useRedis := envIntLookup(EnvUseRedis, 0)
 
 	redis := RedisConfig{
 		Host:     redisHost,
@@ -95,11 +97,11 @@ func newStorage() adapter.Storage {
 		Database: redisDatabase,
 	}
 
-	if redis.Host != "" {
+	if useRedis == 0 {
 		return adapter.NewMemoryStorage()
 	}
 
-	return adapter.NewMemoryStorage()
+	return adapter.NewRedisStorage(redis.Host, redis.Port, redis.Password, redis.Database)
 }
 
 func RateLimitError(w http.ResponseWriter, r *http.Request) {
