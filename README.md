@@ -3,8 +3,12 @@
 This is a simple rate limiter middleware implementation in Go using Redis. It is based on the token bucket algorithm. The middleware can be used to limit the number of requests per second for a specific token or IP address.
 
 
-## Usage 
+## How it works 
+The middleware has token preferance over IP. If the token is present in the request, the middleware will use the token to limit the requests. If the token is not present, the middleware will use the IP address to limit the requests. If the token is present and the IP is present, the middleware will use the token to limit the requests. 
 
+Add the header "API_KEY" to the request to use the token to limit the requests. 
+
+## Usage 
 
 1. You can use the default env file or create a new one with the following variables:
 
@@ -63,6 +67,7 @@ go run cmd/server/main.go
 
 5. Run the server and test the rate limiter: (This will run 200 requests with 10 parallel jobs)
 ```bash
-seq 1 200 | xargs -Iname -P10 curl "http://localhost:8080/"
+seq 1 200 | xargs -Iname -P10 curl http://localhost:8080/ -H "API_KEY: 123"
 ```
+
 
