@@ -3,7 +3,6 @@ package main
 import (
 	"fmt"
 	"net/http"
-	"time"
 
 	"github.com/felipemagrassi/gandalf/ratelimiter"
 	"github.com/go-chi/chi"
@@ -12,7 +11,7 @@ import (
 )
 
 func greet(w http.ResponseWriter, r *http.Request) {
-	fmt.Fprintf(w, "Hello World! %s %s", time.Now(), r.Header.Get("API_KEY"))
+	w.Write([]byte("Hello, World!\n"))
 }
 
 func main() {
@@ -24,8 +23,8 @@ func main() {
 	r.Use(ratelimiter)
 	r.Get("/", greet)
 
-	fmt.Println("Server started at :8081")
-	err := http.ListenAndServe(":8081", r)
+	fmt.Println("Server started at :8080")
+	err := http.ListenAndServe(":8080", r)
 	if err != nil {
 		panic(err)
 	}

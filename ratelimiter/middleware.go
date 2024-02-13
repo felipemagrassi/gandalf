@@ -54,13 +54,13 @@ func rateLimiterMiddleware(config *RateLimiterConfig, next http.Handler) http.Ha
 			err := config.rateLimiter.Increment(token, "token", config.tokenRps, config.tokenTimeout)
 			if err != nil {
 				RateLimitError(w, r)
-				next.ServeHTTP(w, r)
+				return
 			}
 		} else {
 			err := config.rateLimiter.Increment(ip, "ip", config.ipRps, config.ipTimeout)
 			if err != nil {
 				RateLimitError(w, r)
-				next.ServeHTTP(w, r)
+				return
 			}
 		}
 
@@ -97,16 +97,16 @@ func newStorage() adapter.Storage {
 		Database: redisDatabase,
 	}
 
-	if useRedis == 0 {
-		return adapter.NewMemoryStorage()
+	if useRedis == 1 {
+		return adapter.NewRedisStorage(redis.Host, redis.Port, redis.Password, redis.Database)
 	}
 
-	return adapter.NewRedisStorage(redis.Host, redis.Port, redis.Password, redis.Database)
+	return adapter.NewMemoryStorage()
 }
 
 func RateLimitError(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusTooManyRequests)
-	w.Write([]byte("you have reached the maximum number of requests or actions allowed within a certain time frame"))
+	w.Write([]byte("you have reached the maximum number of requests or actions allowed within a certain time frame\n"))
 }
 func envLookup(key string, defaultValue string) string {
 	value, ok := os.LookupEnv(key)
