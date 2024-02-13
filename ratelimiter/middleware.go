@@ -16,6 +16,7 @@ const (
 	EnvIpRps         = "IP_RPS"
 	EnvRedisHost     = "REDIS_HOST"
 	EnvRedisPort     = "REDIS_PORT"
+	EnvRedisDatabase = "REDIS_DATABASE"
 	EnvRedisPassword = "REDIS_PASSWORD"
 )
 
@@ -23,6 +24,7 @@ type RedisConfig struct {
 	Host     string
 	Port     string
 	Password string
+	Database int
 }
 
 type RateLimiterConfig struct {
@@ -84,11 +86,13 @@ func newStorage() adapter.Storage {
 	redisHost := envLookup(EnvRedisHost, "")
 	redisPort := envLookup(EnvRedisPort, "")
 	redisPassword := envLookup(EnvRedisPassword, "")
+	redisDatabase := envIntLookup(EnvRedisDatabase, 0)
 
 	redis := RedisConfig{
 		Host:     redisHost,
 		Port:     redisPort,
 		Password: redisPassword,
+		Database: redisDatabase,
 	}
 
 	if redis.Host != "" {

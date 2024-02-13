@@ -55,7 +55,7 @@ func (rl *RateLimiter) Increment(key string, keyType string, rps int, timeout fl
 	rl.StorageAdapter.ClearOldAccesses(key, keyType, 1*time.Second)
 	keyInfo, _ := rl.StorageAdapter.GetKeyInfo(key, keyType)
 	if keyInfo != nil {
-		if len(keyInfo.Accesses) >= rps {
+		if keyInfo.Accesses >= rps {
 			rl.StorageAdapter.BlockKey(key, keyType)
 			return ReachedMaxTries
 		}

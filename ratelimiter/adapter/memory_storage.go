@@ -48,7 +48,7 @@ func (ms *MemoryStorage) GetKeyInfo(key string, keyType string) (*StorageConfig,
 	return &StorageConfig{
 		KeyType:  keyType,
 		Key:      key,
-		Accesses: ms.accesses[keyType][key],
+		Accesses: len(ms.accesses[keyType][key]),
 	}, nil
 }
 

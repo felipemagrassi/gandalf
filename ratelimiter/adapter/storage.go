@@ -14,5 +14,5 @@ type Storage interface {
 type StorageConfig struct {
 	Key      string
 	KeyType  string
-	Accesses []time.Time
+	Accesses int
 }

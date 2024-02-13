@@ -5,57 +5,58 @@ import (
 	"time"
 )
 
-func TestMemoryStorageBlockKey(t *testing.T) {
-	memoryStorage := NewMemoryStorage()
+func TestRedisStorageBlockKey(t *testing.T) {
+	redisStorage := NewRedisStorage("localhost", "6379", "", 0)
 	key := "1"
 	keyType := "token"
 
-	_, err := memoryStorage.GetBlockedKey(key, keyType)
+	_, err := redisStorage.GetBlockedKey(key, keyType)
 
-	if err != KeyTypeNotFound {
+	if err != KeyNotFound {
 		t.Errorf("Expected nil, got %v", err)
 	}
 
-	err = memoryStorage.BlockKey(key, keyType)
+	err = redisStorage.BlockKey(key, keyType)
 	if err != nil {
 		t.Errorf("Expected nil, got %v", err)
 	}
 
-	blockedAt, err := memoryStorage.GetBlockedKey(key, keyType)
+	blockedAt, err := redisStorage.GetBlockedKey(key, keyType)
 	if err != nil {
 		t.Errorf("Expected nil, got %v", err)
 	}
 	if blockedAt == nil {
-		t.Errorf("Expected time, got nil")
+		t.Errorf("Expected time, got %v", blockedAt)
 	}
 
-	err = memoryStorage.UnblockKey(key, keyType)
+	err = redisStorage.UnblockKey(key, keyType)
 	if err != nil {
 		t.Errorf("Expected nil, got %v", err)
 	}
 
-	_, err = memoryStorage.GetBlockedKey(key, keyType)
+	_, err = redisStorage.GetBlockedKey(key, keyType)
 	if err != KeyNotFound {
 		t.Errorf("Expected nil, got %v", err)
 	}
 }
 
-func TestMemoryStorageIncrement(t *testing.T) {
-	memoryStorage := NewMemoryStorage()
+func TestRedisStorageIncrement(t *testing.T) {
+	redisStorage := NewRedisStorage("localhost", "6379", "", 0)
 	key := "1"
 	keyType := "token"
+	redisStorage.ClearOldAccesses(key, keyType, 0*time.Microsecond)
 
-	err := memoryStorage.Increment(key, keyType)
+	err := redisStorage.Increment(key, keyType)
 	if err != nil {
 		t.Errorf("Expected nil, got %v", err)
 	}
 
-	err = memoryStorage.Increment(key, keyType)
+	err = redisStorage.Increment(key, keyType)
 	if err != nil {
 		t.Errorf("Expected nil, got %v", err)
 	}
 
-	config, err := memoryStorage.GetKeyInfo(key, keyType)
+	config, err := redisStorage.GetKeyInfo(key, keyType)
 	if err != nil {
 		t.Errorf("Expected nil, got %v", err)
 	}
@@ -66,12 +67,12 @@ func TestMemoryStorageIncrement(t *testing.T) {
 
 	time.Sleep(1 * time.Microsecond)
 
-	err = memoryStorage.ClearOldAccesses(key, keyType, 1*time.Microsecond)
+	err = redisStorage.ClearOldAccesses(key, keyType, 1*time.Microsecond)
 	if err != nil {
 		t.Errorf("Expected nil, got %v", err)
 	}
 
-	config, err = memoryStorage.GetKeyInfo(key, keyType)
+	config, err = redisStorage.GetKeyInfo(key, keyType)
 
 	if err != nil {
 		t.Errorf("Expected nil, got %v", err)
