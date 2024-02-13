@@ -18,14 +18,12 @@ type MemoryStorage struct {
 	mutex       sync.Mutex
 	accessMutex sync.Mutex
 	blockMutex  sync.Mutex
-	keyConfig   map[string]map[string]StorageConfig
 	accesses    map[string]map[string][]time.Time
 	blocked     map[string]map[string]time.Time
 }
 
 func NewMemoryStorage() Storage {
 	return &MemoryStorage{
-		keyConfig:   make(map[string]map[string]StorageConfig),
 		blocked:     make(map[string]map[string]time.Time),
 		accesses:    make(map[string]map[string][]time.Time),
 		accessMutex: sync.Mutex{},
@@ -37,21 +35,45 @@ func (ms *MemoryStorage) GetKeyInfo(key string, keyType string) (*StorageConfig,
 	ms.accessMutex.Lock()
 	defer ms.accessMutex.Unlock()
 
-	_, ok := ms.keyConfig[keyType]
+	_, ok := ms.accesses[keyType]
 	if !ok {
 		return nil, KeyTypeNotFound
 	}
 
-	_, ok = ms.keyConfig[keyType][key]
+	_, ok = ms.accesses[keyType][key]
 	if !ok {
 		return nil, KeyNotFound
 	}
 
 	return &StorageConfig{
-		keyType:  keyType,
-		key:      key,
-		accesses: ms.accesses[keyType][key],
+		KeyType:  keyType,
+		Key:      key,
+		Accesses: ms.accesses[keyType][key],
 	}, nil
+}
+
+func (ms *MemoryStorage) ClearOldAccesses(key string, keyType string, between time.Duration) error {
+	ms.accessMutex.Lock()
+	defer ms.accessMutex.Unlock()
+
+	_, ok := ms.accesses[keyType]
+	if !ok {
+		return KeyTypeNotFound
+	}
+
+	_, ok = ms.accesses[keyType][key]
+	if !ok {
+		return KeyNotFound
+	}
+
+	for _, access := range ms.accesses[keyType][key] {
+		if time.Since(access) > between {
+			ms.accesses[keyType][key] = ms.accesses[keyType][key][1:]
+		}
+
+	}
+
+	return nil
 }
 
 func (ms *MemoryStorage) GetBlockedKey(key string, keyType string) (*time.Time, error) {
@@ -77,11 +99,11 @@ func (ms *MemoryStorage) Increment(key string, keyType string) error {
 
 	_, ok := ms.accesses[keyType]
 	if !ok {
-		return KeyTypeNotFound
+		ms.accesses[keyType] = make(map[string][]time.Time)
 	}
 	_, ok = ms.accesses[keyType][key]
 	if !ok {
-		return KeyNotFound
+		ms.accesses[keyType][key] = make([]time.Time, 0)
 	}
 
 	ms.accesses[keyType][key] = append(ms.accesses[keyType][key], time.Now())
@@ -93,17 +115,7 @@ func (ms *MemoryStorage) BlockKey(key string, keyType string) error {
 	ms.blockMutex.Lock()
 	defer ms.blockMutex.Unlock()
 
-	_, ok := ms.keyConfig[keyType]
-	if !ok {
-		return KeyTypeNotFound
-	}
-
-	_, ok = ms.keyConfig[keyType][key]
-	if !ok {
-		return KeyNotFound
-	}
-
-	_, ok = ms.blocked[keyType]
+	_, ok := ms.blocked[keyType]
 	if !ok {
 		ms.blocked[keyType] = make(map[string]time.Time)
 	}
@@ -126,38 +138,4 @@ func (ms *MemoryStorage) UnblockKey(key string, keyType string) error {
 	}
 	delete(ms.blocked[keyType], key)
 	return nil
-}
-
-func (ms *MemoryStorage) AddKey(key string, keyType string) error {
-	ms.accessMutex.Lock()
-	defer ms.accessMutex.Unlock()
-
-	_, ok := ms.keyConfig[keyType]
-
-	if !ok {
-		ms.keyConfig[keyType] = make(map[string]StorageConfig)
-	}
-
-	_, ok = ms.accesses[keyType]
-	if !ok {
-		ms.accesses[keyType] = make(map[string][]time.Time)
-	}
-
-	_, ok = ms.accesses[keyType][key]
-	if !ok {
-		ms.accesses[keyType][key] = make([]time.Time, 0)
-	}
-
-	_, ok = ms.keyConfig[keyType][key]
-
-	if !ok {
-		ms.keyConfig[keyType][key] = StorageConfig{
-			key:      key,
-			keyType:  keyType,
-			accesses: ms.accesses[keyType][key],
-		}
-		return nil
-	}
-
-	return KeyAlreadyRegistered
 }

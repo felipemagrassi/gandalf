@@ -5,18 +5,21 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/felipemagrassi/gandalf/ratelimiter"
 	"github.com/go-chi/chi"
 	"github.com/go-chi/chi/middleware"
 )
 
 func greet(w http.ResponseWriter, r *http.Request) {
-	fmt.Fprintf(w, "Hello World! %s", time.Now())
+	fmt.Fprintf(w, "Hello World! %s %s", time.Now(), r.Header.Get("API_KEY"))
 }
 
 func main() {
+	ratelimiter := ratelimiter.NewRateLimiterMiddleware()
 	r := chi.NewRouter()
 
 	r.Use(middleware.Logger)
+	r.Use(ratelimiter)
 	r.Get("/", greet)
 
 	fmt.Println("Server started at :8081")

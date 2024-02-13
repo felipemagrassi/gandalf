@@ -7,10 +7,14 @@ import (
 	"github.com/felipemagrassi/gandalf/ratelimiter/adapter"
 )
 
-type keyConfig struct {
-	rps     int
-	timeout time.Duration
-}
+var (
+	KeyNotFound     = errors.New("Key not found")
+	KeyTypeNotFound = errors.New("KeyTypeNotFound")
+	InvalidRps      = errors.New("RpsNotFound")
+	InvalidTimeout  = errors.New("TimeoutNotFound")
+	ReachedMaxTries = errors.New("Reached max tries")
+	BlockedKey      = errors.New("Blocked key")
+)
 
 type RateLimiter struct {
 	StorageAdapter adapter.Storage
@@ -22,42 +26,45 @@ func NewRateLimiter(storageAdapter adapter.Storage) *RateLimiter {
 	}
 }
 
-func (rl *RateLimiter) AddKey(key string, keyType string, rps, timeout int) error {
+func (rl *RateLimiter) Increment(key string, keyType string, rps int, timeout float64) error {
 	if key == "" {
-		return errors.New("Key is required")
+		return KeyNotFound
 	}
 
 	if keyType == "" {
-		return errors.New("KeyType is required")
+		return KeyTypeNotFound
 	}
 
-	if rps <= 0 || timeout <= 0 {
-		return errors.New("RPS and Timeout must be greater than 0")
+	if rps <= 0 {
+		return InvalidRps
 	}
 
-	foundKey, err := rl.StorageAdapter.GetKey(key, keyType)
-	if foundKey != nil {
-		rl.StorageAdapter.DeleteKey(key, keyType)
+	if timeout <= 0 {
+		return InvalidTimeout
 	}
 
-	err = rl.StorageAdapter.AddKey(key, keyType, rps, timeout)
-	return err
-}
+	blockedAt, _ := rl.StorageAdapter.GetBlockedKey(key, keyType)
+	if blockedAt != nil {
+		if time.Since(*blockedAt) < time.Duration(timeout)*time.Second {
+			return BlockedKey
+		}
 
-func (rl *RateLimiter) Increment(key string, keyType string) (*time.Duration, error) {
-	if key == "" {
-		return nil, errors.New("Key is required")
+		rl.StorageAdapter.UnblockKey(key, keyType)
 	}
 
-	if keyType == "" {
-		return nil, errors.New("KeyType is required")
+	rl.StorageAdapter.ClearOldAccesses(key, keyType, 1*time.Second)
+	keyInfo, _ := rl.StorageAdapter.GetKeyInfo(key, keyType)
+	if keyInfo != nil {
+		if len(keyInfo.Accesses) >= rps {
+			rl.StorageAdapter.BlockKey(key, keyType)
+			return ReachedMaxTries
+		}
 	}
 
-	_, err := rl.StorageAdapter.GetKey(key, keyType)
+	err := rl.StorageAdapter.Increment(key, keyType)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
-	timeLeft, err := rl.StorageAdapter.Increment(key, keyType)
-	return timeLeft, err
+	return nil
 }

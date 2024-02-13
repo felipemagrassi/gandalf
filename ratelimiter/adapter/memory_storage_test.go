@@ -2,14 +2,13 @@ package adapter
 
 import (
 	"testing"
+	"time"
 )
 
 func TestMemoryStorageBlockKey(t *testing.T) {
 	memoryStorage := NewMemoryStorage()
 	key := "1"
 	keyType := "token"
-
-	memoryStorage.AddKey(key, keyType)
 
 	_, err := memoryStorage.GetBlockedKey(key, keyType)
 
@@ -41,51 +40,12 @@ func TestMemoryStorageBlockKey(t *testing.T) {
 	}
 }
 
-func TestMemoryStorageKey(t *testing.T) {
-	memoryStorage := NewMemoryStorage()
-	key := "1"
-	keyType := "token"
-
-	keyInfo, err := memoryStorage.GetKeyInfo(key, keyType)
-	if err != KeyTypeNotFound {
-		t.Errorf("Expected nil, got %v", err)
-	}
-
-	if keyInfo != nil {
-		t.Errorf("Expected nil, got %v", keyInfo)
-	}
-
-	err = memoryStorage.AddKey(key, keyType)
-	if err != nil {
-		t.Errorf("Expected nil, got %v", err)
-	}
-
-	keyInfo, err = memoryStorage.GetKeyInfo(key, keyType)
-	if err != nil {
-		t.Errorf("Expected nil, got %v", err)
-	}
-
-	if keyInfo == nil {
-		t.Errorf("Expected keyInfo, got nil")
-	}
-
-	err = memoryStorage.AddKey(key, keyType)
-	if err != KeyAlreadyRegistered {
-		t.Errorf("Expected KeyAlreadyExists, got %v", err)
-	}
-}
-
 func TestMemoryStorageIncrement(t *testing.T) {
 	memoryStorage := NewMemoryStorage()
 	key := "1"
 	keyType := "token"
 
 	err := memoryStorage.Increment(key, keyType)
-	if err != KeyTypeNotFound {
-		t.Errorf("Expected nil, got %v", err)
-	}
-
-	err = memoryStorage.AddKey(key, keyType)
 	if err != nil {
 		t.Errorf("Expected nil, got %v", err)
 	}
@@ -94,4 +54,30 @@ func TestMemoryStorageIncrement(t *testing.T) {
 	if err != nil {
 		t.Errorf("Expected nil, got %v", err)
 	}
+
+	config, err := memoryStorage.GetKeyInfo(key, keyType)
+	if err != nil {
+		t.Errorf("Expected nil, got %v", err)
+	}
+
+	if len(config.Accesses) != 2 {
+		t.Errorf("Expected 2, got %v", len(config.Accesses))
+	}
+
+	time.Sleep(1 * time.Microsecond)
+
+	err = memoryStorage.ClearOldAccesses(key, keyType, 1*time.Microsecond)
+	if err != nil {
+		t.Errorf("Expected nil, got %v", err)
+	}
+
+	config, err = memoryStorage.GetKeyInfo(key, keyType)
+
+	if err != nil {
+		t.Errorf("Expected nil, got %v", err)
+	}
+	if len(config.Accesses) != 0 {
+		t.Errorf("Expected 0, got %v", len(config.Accesses))
+	}
+
 }
