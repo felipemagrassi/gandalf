@@ -8,6 +8,7 @@ import (
 	"github.com/felipemagrassi/gandalf/ratelimiter"
 	"github.com/go-chi/chi"
 	"github.com/go-chi/chi/middleware"
+	"github.com/joho/godotenv"
 )
 
 func greet(w http.ResponseWriter, r *http.Request) {
@@ -15,6 +16,7 @@ func greet(w http.ResponseWriter, r *http.Request) {
 }
 
 func main() {
+	godotenv.Load(".env")
 	ratelimiter := ratelimiter.NewRateLimiterMiddleware()
 	r := chi.NewRouter()
 

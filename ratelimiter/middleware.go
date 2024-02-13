@@ -3,9 +3,27 @@ package ratelimiter
 import (
 	"net"
 	"net/http"
+	"os"
+	"strconv"
 
 	"github.com/felipemagrassi/gandalf/ratelimiter/adapter"
 )
+
+const (
+	EnvTokenTimeout  = "TOKEN_TIMEOUT"
+	EnvTokenRps      = "TOKEN_RPS"
+	EnvIpTimeout     = "IP_TIMEOUT"
+	EnvIpRps         = "IP_RPS"
+	EnvRedisHost     = "REDIS_HOST"
+	EnvRedisPort     = "REDIS_PORT"
+	EnvRedisPassword = "REDIS_PASSWORD"
+)
+
+type RedisConfig struct {
+	Host     string
+	Port     string
+	Password string
+}
 
 type RateLimiterConfig struct {
 	tokenTimeout float64
@@ -48,20 +66,75 @@ func rateLimiterMiddleware(config *RateLimiterConfig, next http.Handler) http.Ha
 }
 
 func newRateLimitConfig(storage adapter.Storage) *RateLimiterConfig {
+	tokenTimeout := envFloat64Lookup(EnvTokenTimeout, 5.0)
+	tokenRps := envIntLookup(EnvTokenRps, 10)
+	ipTimeout := envFloat64Lookup(EnvIpTimeout, 5.0)
+	ipRps := envIntLookup(EnvIpRps, 10)
+
 	return &RateLimiterConfig{
-		tokenTimeout: 1.5,
-		tokenRps:     5,
-		ipTimeout:    1.5,
-		ipRps:        5,
+		tokenTimeout: tokenTimeout,
+		tokenRps:     tokenRps,
+		ipTimeout:    ipTimeout,
+		ipRps:        ipRps,
 		rateLimiter:  NewRateLimiter(storage),
 	}
 }
 
 func newStorage() adapter.Storage {
+	redisHost := envLookup(EnvRedisHost, "")
+	redisPort := envLookup(EnvRedisPort, "")
+	redisPassword := envLookup(EnvRedisPassword, "")
+
+	redis := RedisConfig{
+		Host:     redisHost,
+		Port:     redisPort,
+		Password: redisPassword,
+	}
+
+	if redis.Host != "" {
+		return adapter.NewMemoryStorage()
+	}
+
 	return adapter.NewMemoryStorage()
 }
 
 func RateLimitError(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusTooManyRequests)
 	w.Write([]byte("you have reached the maximum number of requests or actions allowed within a certain time frame"))
+}
+func envLookup(key string, defaultValue string) string {
+	value, ok := os.LookupEnv(key)
+	if !ok {
+		return defaultValue
+	}
+
+	return value
+}
+
+func envFloat64Lookup(key string, defaultValue float64) float64 {
+	value, ok := os.LookupEnv(key)
+	if !ok {
+		return defaultValue
+	}
+
+	parsedValue, err := strconv.ParseFloat(value, 64)
+	if err != nil {
+		return defaultValue
+	}
+
+	return parsedValue
+}
+
+func envIntLookup(key string, defaultValue int) int {
+	value, ok := os.LookupEnv(key)
+	if !ok {
+		return defaultValue
+	}
+
+	parsedValue, err := strconv.Atoi(value)
+	if err != nil {
+		return defaultValue
+	}
+
+	return parsedValue
 }

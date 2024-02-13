@@ -9,6 +9,9 @@ import (
 )
 
 func TestCanCreateRateLimiterMiddleware(t *testing.T) {
+	t.Setenv(EnvTokenTimeout, "1")
+	t.Setenv(EnvTokenRps, "10")
+
 	r := chi.NewRouter()
 	path := "/"
 
