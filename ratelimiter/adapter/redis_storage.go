@@ -2,25 +2,34 @@ package adapter
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
 	"github.com/redis/go-redis/v9"
 )
 
+var ConnectionError = errors.New("connection error")
+
 type RedisStorage struct {
 	client *redis.Client
 }
 
-func NewRedisStorage(host, port, password string, database int) Storage {
+func NewRedisStorage(host, port, password string, database int) (Storage, error) {
 	client := redis.NewClient(&redis.Options{
 		Addr:     host + ":" + port,
 		Password: password,
 		DB:       database,
 	})
+	_, err := client.Ping(context.Background()).Result()
+
+	if err != nil {
+		return nil, ConnectionError
+	}
+
 	return &RedisStorage{
 		client: client,
-	}
+	}, nil
 }
 
 func (rs *RedisStorage) GetKeyInfo(key string, keyType string) (*StorageConfig, error) {

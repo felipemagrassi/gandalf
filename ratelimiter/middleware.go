@@ -1,6 +1,7 @@
 package ratelimiter
 
 import (
+	"fmt"
 	"net"
 	"net/http"
 	"os"
@@ -98,7 +99,15 @@ func newStorage() adapter.Storage {
 	}
 
 	if useRedis == 1 {
-		return adapter.NewRedisStorage(redis.Host, redis.Port, redis.Password, redis.Database)
+		redisStorage, err := adapter.NewRedisStorage(redis.Host, redis.Port, redis.Password, redis.Database)
+		if err != nil {
+			fmt.Println("Error connecting to Redis: ", err.Error())
+			fmt.Println("Falling back to memory storage")
+
+			return adapter.NewMemoryStorage()
+		}
+
+		return redisStorage
 	}
 
 	return adapter.NewMemoryStorage()
