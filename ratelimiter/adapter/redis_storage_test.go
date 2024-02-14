@@ -6,11 +6,15 @@ import (
 )
 
 func TestRedisStorageBlockKey(t *testing.T) {
-	redisStorage := NewRedisStorage("localhost", "6379", "", 0)
+	redisStorage, err := NewRedisStorage("localhost", "6379", "", 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+
 	key := "1"
 	keyType := "token"
 
-	_, err := redisStorage.GetBlockedKey(key, keyType)
+	_, err = redisStorage.GetBlockedKey(key, keyType)
 
 	if err != KeyNotFound {
 		t.Errorf("Expected nil, got %v", err)
@@ -41,12 +45,16 @@ func TestRedisStorageBlockKey(t *testing.T) {
 }
 
 func TestRedisStorageIncrement(t *testing.T) {
-	redisStorage := NewRedisStorage("localhost", "6379", "", 0)
+	redisStorage, err := NewRedisStorage("localhost", "6379", "", 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+
 	key := "1"
 	keyType := "token"
 	redisStorage.ClearOldAccesses(key, keyType, 0*time.Microsecond)
 
-	err := redisStorage.Increment(key, keyType)
+	err = redisStorage.Increment(key, keyType)
 	if err != nil {
 		t.Errorf("Expected nil, got %v", err)
 	}
